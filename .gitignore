@@ -1,0 +1,10 @@
+# @file .gitignore
+# @description Keeps model weights, build output, and machine-local files out of version control.
+# @depends_on none
+# @depended_on_by none
+
+# Model weights are large downloads, never commits.
+*.safetensors
+/inference-engine
+.DS_Store
+__pycache__/
