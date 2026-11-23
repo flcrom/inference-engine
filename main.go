@@ -1,7 +1,7 @@
 /**
  * @file main.go
- * @description Command-line entry point that dispatches engine commands, currently inspect.
- * @depends_on go.mod, safetensors/safetensors.go
+ * @description Command-line entry point that dispatches engine commands: inspect and embed.
+ * @depends_on go.mod, safetensors/safetensors.go, gpt2/embed.go
  * @depended_on_by main_test.go
  */
 
@@ -9,6 +9,7 @@
 // framework. Usage:
 //
 //	inference-engine inspect <model.safetensors>
+//	inference-engine embed <model.safetensors> <ids.json>
 package main
 
 import (
@@ -19,6 +20,7 @@ import (
 	"os"
 	"sort"
 
+	"github.com/flcrom/inference-engine/gpt2"
 	"github.com/flcrom/inference-engine/safetensors"
 )
 
@@ -43,6 +45,11 @@ func run(args []string, stdout io.Writer) error {
 			return errors.New("usage: inference-engine inspect <model.safetensors>")
 		}
 		return inspect(args[1], stdout)
+	case "embed":
+		if len(args) != 3 {
+			return errors.New("usage: inference-engine embed <model.safetensors> <ids.json>")
+		}
+		return embed(args[1], args[2], stdout)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -80,7 +87,61 @@ func inspect(path string, stdout io.Writer) error {
 		summaries = append(summaries, tensorSummary{name, tensor.DType, tensor.Shape, first})
 	}
 
-	encoded, err := json.Marshal(summaries)
+	return printJSON(stdout, summaries)
+}
+
+// embed prints the embedding of every token ID in idsPath, in order, as a
+// JSON array of rows.
+func embed(modelPath, idsPath string, stdout io.Writer) error {
+	tensors, err := safetensors.Load(modelPath)
+	if err != nil {
+		return err
+	}
+	ids, err := readIDs(idsPath)
+	if err != nil {
+		return err
+	}
+	wte, err := lookup(tensors, "wte.weight")
+	if err != nil {
+		return err
+	}
+	wpe, err := lookup(tensors, "wpe.weight")
+	if err != nil {
+		return err
+	}
+	embeddings, err := gpt2.Embed(wte, wpe, ids)
+	if err != nil {
+		return err
+	}
+	return printJSON(stdout, embeddings)
+}
+
+// readIDs decodes a JSON array of whole numbers, such as [464, 3139].
+// Decoding into []int rejects fractions and anything that is not an array.
+func readIDs(path string) ([]int, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var ids []int
+	if err := json.Unmarshal(raw, &ids); err != nil {
+		return nil, fmt.Errorf("%s is not a JSON array of token IDs: %w", path, err)
+	}
+	return ids, nil
+}
+
+// lookup returns the named tensor, or an error naming what is missing.
+func lookup(tensors map[string]safetensors.Tensor, name string) (safetensors.Tensor, error) {
+	tensor, ok := tensors[name]
+	if !ok {
+		return safetensors.Tensor{}, fmt.Errorf("model has no tensor named %q", name)
+	}
+	return tensor, nil
+}
+
+// printJSON writes v as one line of JSON.
+func printJSON(stdout io.Writer, v any) error {
+	encoded, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}

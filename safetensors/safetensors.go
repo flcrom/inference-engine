@@ -2,7 +2,7 @@
  * @file safetensors/safetensors.go
  * @description Parses a safetensors file into named tensors of float32 values, rejecting malformed headers and offsets.
  * @depends_on none
- * @depended_on_by main.go, safetensors/safetensors_test.go, docs/safetensors.md
+ * @depended_on_by main.go, safetensors/safetensors_test.go, docs/safetensors.md, gpt2/embed.go
  */
 
 // Package safetensors reads model weights stored in the safetensors format.

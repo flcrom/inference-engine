@@ -1,7 +1,7 @@
 <!--
 @file MEMORY.md
 @description Routes project context: file index, metadata rules, current state, and durable decisions.
-@depends_on docs/safetensors.md
+@depends_on docs/safetensors.md, docs/embed.md
 @depended_on_by AGENTS.md, README.md, scripts/check_metadata.py
 -->
 
@@ -20,23 +20,27 @@ Read the file index below. For candidate files, read only the metadata block in 
 | `.gitignore` | Keeps weights, build output and local files out of git. | — | — |
 | `AGENTS.md` | Working agreement for AI collaborators. | Memory, metadata checker | — |
 | `MEMORY.md` | File index, state and durable decisions. | Safetensors doc | Agents, README, metadata checker |
-| `README.md` | Human entry point, progress and commands. | Memory, safetensors doc | — |
+| `README.md` | Human entry point, progress and commands. | Memory, safetensors doc, embed doc | — |
 | `go.mod` | Module path and Go version. | — | `main.go` |
-| `main.go` | CLI dispatch and the `inspect` command. | `go.mod`, loader | CLI tests |
-| `main_test.go` | Tests inspect output, ordering, truncation and argument errors. | `main.go`, test file builder | — |
-| `safetensors/safetensors.go` | Parses and validates safetensors files into float32 tensors. | — | `main.go`, loader tests, safetensors doc |
+| `main.go` | CLI dispatch and the `inspect` and `embed` commands. | `go.mod`, loader, embed | CLI tests |
+| `main_test.go` | Tests inspect and embed output, ordering, truncation and input errors. | `main.go`, test file builder | — |
+| `safetensors/safetensors.go` | Parses and validates safetensors files into float32 tensors. | — | `main.go`, loader tests, safetensors doc, embed |
+| `gpt2/embed.go` | Adds each token's `wte` row to its position's `wpe` row. | Loader | `main.go`, embed tests, embed doc |
+| `gpt2/embed_test.go` | Tests the lookup and addition, repeated IDs, unchanged weights and bad input. | Embed | — |
 | `safetensors/safetensors_test.go` | Tests F32/I32 decoding, metadata skipping and malformed input. | Loader, test file builder | — |
 | `safetensors/safetensorstest/safetensorstest.go` | Builds small safetensors files for tests. | — | Loader tests, CLI tests |
 | `docs/safetensors.md` | Explains the file layout, GPT-2 tensor names and loader checks. | Loader | README, Memory |
+| `docs/embed.md` | Explains token and position rows, row lookup in flat tensors, and the embed checks. | Embed | README, Memory |
 | `scripts/check_metadata.py` | Validates metadata headers and reciprocal edges. | Memory | Agents |
 
 ## Current state
 
-Step 1 (inspect) is implemented and verified locally with unit tests, `go vet`, and command runs on hand-built F32 and I32 files. It has not yet been run on GPT-2's real 548 MB weights. Learner sign-off for step 1 is pending.
+Step 1 (inspect) is verified locally with unit tests, `go vet`, and runs on hand-built F32 and I32 files, and it passed the challenge's stage-1 tests. Step 2 (embed) is verified with unit and CLI tests on hand-built tables. Neither step has been run on GPT-2's real 548 MB weights yet. The learner understands step 1; their walkthrough of step 2's code is pending.
 
 ## Durable decisions
 
 - **2026-11-23: Go, standard library only.** Go keeps the focus on inference rather than on learning a new language. No dependencies until a step needs one.
 - **2026-11-23: original code only.** The loader was written fresh instead of reusing supplied starter code. It validates offsets and shape-versus-byte counts and returns errors instead of panicking.
 - **2026-11-23: flat tensors.** Tensors are `[]float32` in row-major order with a separate shape. Index arithmetic stays visible in the code instead of being hidden in nested slices.
+- **2026-11-24: arithmetic lives in `gpt2/`.** Each forward-pass step is a function over `safetensors.Tensor` values, and `main.go` only does file I/O and JSON. Rows are views into the weights, so results are always written into new slices.
 - **2026-11-23: testable commands.** Commands take an `io.Writer` and return errors; only `main` touches `os.Args`, `os.Stdout` and exit codes.
